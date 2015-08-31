@@ -47,4 +47,4 @@ setup(name='chardet',
       install_requires=['enum34'] if sys.version_info < (3, 4) else [],
       test_requires=['nose'],
       entry_points={'console_scripts':
-                    ['chardetect = chardet.cli.chardetect:main']})
+                    ['chardetect3 = chardet.cli.chardetect:main']})
