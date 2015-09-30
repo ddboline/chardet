@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import re
-import sys
+
 from setuptools import find_packages, setup
 
 
@@ -23,7 +23,7 @@ setup(name='chardet',
       author='Mark Pilgrim',
       author_email='mark@diveintomark.org',
       maintainer='Daniel Blanchard',
-      maintainer_email='dblanchard@ets.org',
+      maintainer_email='dan.blanchard@gmail.com',
       url='https://github.com/chardet/chardet',
       license="LGPL",
       keywords=['encoding', 'i18n', 'xml'],
@@ -44,7 +44,6 @@ setup(name='chardet',
                     "Modules"),
                    "Topic :: Text Processing :: Linguistic"],
       packages=find_packages(),
-      install_requires=['enum34'] if sys.version_info < (3, 4) else [],
-      test_requires=['nose'],
+      test_requires=['nose', 'hypothesis'],
       entry_points={'console_scripts':
                     ['chardetect3 = chardet.cli.chardetect:main']})

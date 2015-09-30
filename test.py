@@ -7,10 +7,15 @@ Run chardet on a bunch of documents and see that we get the correct encodings.
 
 from __future__ import with_statement
 
+import textwrap
+from difflib import ndiff
+from io import open
 from os import listdir
 from os.path import dirname, isdir, join, realpath, relpath, splitext
 
-from nose.tools import eq_
+import hypothesis.strategies as st
+from hypothesis import given, assume, Settings, Verbosity
+from nose.tools import eq_, assert_raises
 
 import chardet
 
@@ -25,12 +30,28 @@ MISSING_ENCODINGS = set(['iso-8859-2', 'iso-8859-6', 'windows-1250',
 def check_file_encoding(file_name, encoding):
     """ Ensure that we detect the encoding for file_name correctly. """
     with open(file_name, 'rb') as f:
-        result = chardet.detect(f.read())
+        input_bytes = f.read()
+        result = chardet.detect(input_bytes)
+        try:
+            expected_unicode = input_bytes.decode(encoding)
+        except LookupError:
+            expected_unicode = ''
+        try:
+            detected_unicode = input_bytes.decode(result['encoding'])
+        except (LookupError, UnicodeDecodeError):
+            detected_unicode = ''
     encoding = EQUIVALENT_ENCODINGS.get(encoding, encoding)
-    eq_(result['encoding'].lower(), encoding, ("Expected %s, but got %s for "
-                                               "%s" % (encoding,
-                                                       result['encoding'],
-                                                       file_name)))
+    if result['encoding'].lower() != encoding:
+        wrapped_expected = '\n'.join(textwrap.wrap(expected_unicode, 100)) + '\n'
+        wrapped_detected = '\n'.join(textwrap.wrap(detected_unicode, 100)) + '\n'
+        diff = ''.join(ndiff(wrapped_expected.splitlines(True),
+                             wrapped_detected.splitlines(True)))
+    else:
+        diff = ''
+    eq_(result['encoding'].lower(), encoding,
+        ("Expected %s, but got %s for %s.  Character differences: \n%s" %
+         (encoding, result['encoding'], file_name, diff)))
+
 
 
 def test_encoding_detection():
@@ -56,3 +77,31 @@ def test_encoding_detection():
             if ext not in ['.html', '.txt', '.xml', '.srt']:
                 continue
             yield check_file_encoding, join(path, file_name), encoding
+
+
+class JustALengthIssue(Exception):
+    pass
+
+
+@given(st.text(min_size=1), st.sampled_from(['ascii', 'utf-8', 'utf-16',
+                                             'utf-32', 'iso-8859-7',
+                                             'iso-8859-8', 'windows-1255']),
+       st.randoms(), settings=Settings(max_examples=200))
+def test_never_fails_to_detect_if_there_is_a_valid_encoding(txt, enc, rnd):
+    try:
+        data = txt.encode(enc)
+    except UnicodeEncodeError:
+        assume(False)
+    detected = chardet.detect(data)['encoding']
+    if detected is None:
+        @given(st.text(), settings=Settings(verbosity=Verbosity.quiet,
+                                            max_shrinks=0, max_examples=50),
+               random=rnd)
+        def string_poisons_following_text(suffix):
+            try:
+                extended = (txt + suffix).encode(enc)
+            except UnicodeEncodeError:
+                assume(False)
+            if chardet.detect(extended)['encoding'] is not None:
+                raise JustALengthIssue()
+        assert_raises(JustALengthIssue, string_poisons_following_text)
